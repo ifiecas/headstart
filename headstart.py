@@ -5,6 +5,8 @@ from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 import os
 import time
+import hashlib
+from datetime import datetime
 
 # --- Page config ---
 st.set_page_config(
@@ -36,22 +38,69 @@ except Exception as e:
 # --- CSS Styling ---
 st.markdown("""
     <style>
-        body { background-color: #f3f2f1; }
+        html, body, .main { height: 100%; background-color: #f3f2f1; }
         .block-container {
-            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 720px;
             margin: auto;
-            padding: 2rem;
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            padding: 0;
         }
-        .stMarkdown { font-family: Segoe UI, sans-serif; color: #201f1e; }
+        .chat-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        .message-block {
+            margin-bottom: 1rem;
+        }
+        .user-group, .assistant-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .user-group { align-items: flex-end; }
+        .message {
+            max-width: 70%;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            margin: 2px 0;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #e6e6e6;
+            color: #000;
+            align-self: flex-end;
+        }
+        .assistant-message {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            color: #000;
+        }
+        .sender-label {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
+        }
+        .timestamp {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        .chat-input-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 1rem;
+            border-top: 1px solid #ccc;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Title ---
 st.title("🤖 Headstart Copilot")
-st.markdown("Welcome to your meeting prep assistant. Ask anything to start preparing for your meeting.")
 
 # --- Session state ---
 if "chat_history" not in st.session_state:
@@ -59,43 +108,37 @@ if "chat_history" not in st.session_state:
 if "thread_id" not in st.session_state:
     thread = project_client.agents.create_thread()
     st.session_state.thread_id = thread.id
-if "seen_messages" not in st.session_state:
-    st.session_state.seen_messages = set()
+if "seen_hashes" not in st.session_state:
+    st.session_state.seen_hashes = set()
 
 # --- Reset Conversation ---
 if st.button("🔄 New Conversation"):
     thread = project_client.agents.create_thread()
     st.session_state.thread_id = thread.id
     st.session_state.chat_history = []
-    st.session_state.seen_messages = set()
+    st.session_state.seen_hashes = set()
     st.experimental_rerun()
 
-# --- Azure call function using message content hashes for deduplication ---
+# --- Generate unique ID ---
+def generate_message_id(content, role):
+    return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
+
+# --- Azure call function ---
 def call_azure_agent(user_input):
     try:
-        if debug_mode:
-            st.write("📤 Sending message to Azure AI...")
-
         project_client.agents.create_message(
             thread_id=st.session_state.thread_id,
             role="user",
             content=user_input
         )
 
-        if debug_mode:
-            st.write("⚙️ Running assistant...")
-
         project_client.agents.create_and_process_run(
             thread_id=st.session_state.thread_id,
             agent_id=agent.id
         )
 
-        if debug_mode:
-            st.write("📥 Fetching messages from thread...")
-
         start_time = time.time()
         timeout = 15
-        seen_hashes = st.session_state.seen_messages
         new_responses = []
 
         while True:
@@ -108,54 +151,61 @@ def call_azure_agent(user_input):
                     content = getattr(text, 'value', '').strip()
                     if not content:
                         continue
-
-                    content_hash = hash((role, content))
-                    if content_hash not in seen_hashes:
-                        new_responses.append((role, content))
-                        seen_hashes.add(content_hash)
-
-                        if debug_mode:
-                            st.write(f"🧠 DEBUG - Role: {role}, Message: {content}")
-
+                    timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
+                    new_responses.append((role, content, timestamp))
                 except AttributeError:
-                    if debug_mode:
-                        st.warning("⚠️ Skipped malformed message")
-
+                    continue
             if new_responses or (time.time() - start_time > timeout):
                 break
             time.sleep(0.5)
 
         if not new_responses:
-            return [("assistant", "⚠️ No response received from Azure AI within timeout.")]
-
+            return [("assistant", "⚠️ No response received from Azure AI within timeout.", datetime.now().strftime("%d/%m/%Y %I:%M %p"))]
         return new_responses
 
     except Exception as e:
-        error_trace = traceback.format_exc()
-        st.error("❌ Azure API call failed. Displaying fallback message.")
         if debug_mode:
-            st.code(error_trace)
-        return [("assistant", "⚠️ Sorry, I couldn’t reach Azure right now. Please try again shortly.")]
+            st.sidebar.error("Exception occurred")
+            st.sidebar.code(traceback.format_exc())
+        return [("assistant", "⚠️ Sorry, I couldn’t reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"))]
 
-# --- Chat input ---
-prompt = st.chat_input("Enter your message...")
+# --- Grouped Chat Display ---
+st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+last_sender = None
+rendered_ids = set()
+for idx, (role, message, timestamp) in enumerate(st.session_state.chat_history):
+    msg_id = generate_message_id(message, role)
+    if msg_id in rendered_ids:
+        continue
+    rendered_ids.add(msg_id)
+    is_new_group = last_sender != role
+    if is_new_group:
+        st.markdown(f"""
+        <div class='message-block {role}-group'>
+            <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
+            <div class='timestamp'>{timestamp}</div>
+            <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>", unsafe_allow_html=True)
+    last_sender = role
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Chat input (fixed bottom) ---
+with st.container():
+    with st.markdown('<div class="chat-input-container">', unsafe_allow_html=True):
+        prompt = st.chat_input("Type a message")
 
 # --- Handle new message ---
-if prompt and ("user", prompt) not in st.session_state.chat_history:
-    st.session_state.chat_history.append(("user", prompt))
-    st.chat_message(name="You").markdown(prompt)
-
-    with st.spinner("Headstart Copilot is thinking..."):
-        responses = call_azure_agent(prompt)
-        for role, message in responses:
-            if (role, message) not in st.session_state.chat_history:
-                st.session_state.chat_history.append((role, message))
-                st.chat_message(name="Headstart Copilot" if role == "assistant" else "You").markdown(message)
-
-# --- Display full chat history ---
-for role, message in st.session_state.chat_history:
-    st.chat_message(name="Headstart Copilot" if role == "assistant" else "You").markdown(message)
-
-# 📌 Note:
-# ✅ FIXED: Avoid nested `with st.chat_message()` calls. Use one-liner format like:
-# st.chat_message(name="...").markdown("...")
+if prompt:
+    timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
+    content_hash = generate_message_id(prompt.strip(), "user")
+    if content_hash not in [generate_message_id(m, r) for r, m, _ in st.session_state.chat_history]:
+        st.session_state.chat_history.append(("user", prompt.strip(), timestamp))
+        with st.spinner("Headstart Copilot is thinking..."):
+            responses = call_azure_agent(prompt)
+            for role, message, timestamp in responses:
+                msg_id = generate_message_id(message, role)
+                if msg_id not in [generate_message_id(m, r) for r, m, _ in st.session_state.chat_history]:
+                    st.session_state.chat_history.append((role, message, timestamp))
