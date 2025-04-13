@@ -125,6 +125,8 @@ def generate_message_id(content, role):
 
 # --- Azure call function ---
 def call_azure_agent(user_input):
+    # Modify assistant replies to prepend reference to user message
+
     try:
         project_client.agents.create_message(
             thread_id=st.session_state.thread_id,
@@ -149,10 +151,13 @@ def call_azure_agent(user_input):
                     role = getattr(msg, 'role', None)
                     text = getattr(msg, 'text', None)
                     content = getattr(text, 'value', '').strip()
+                    if role == 'assistant':
+                        content = f'*<span style="font-size: 13px; color: #999;">In response to: {user_input}</span>*<br><br>' + content
                     if not content:
                         continue
                     timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-                    new_responses.append((role, content, timestamp))
+                    formatted_content = f'*<span style="font-size: 13px; color: #999;">In response to: {user_input}</span>*<br><br>' + content if role == 'assistant' else content
+                    new_responses.append((role, formatted_content, timestamp, user_input if role == 'assistant' else None))
                 except AttributeError:
                     continue
             if new_responses or (time.time() - start_time > timeout):
@@ -160,20 +165,20 @@ def call_azure_agent(user_input):
             time.sleep(0.5)
 
         if not new_responses:
-            return [("assistant", "⚠️ No response received from Azure AI within timeout.", datetime.now().strftime("%d/%m/%Y %I:%M %p"))]
+            return [("assistant", "⚠️ No response received from Azure AI within timeout.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
         return new_responses
 
     except Exception as e:
         if debug_mode:
             st.sidebar.error("Exception occurred")
             st.sidebar.code(traceback.format_exc())
-        return [("assistant", "⚠️ Sorry, I couldn’t reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"))]
+        return [("assistant", "⚠️ Sorry, I couldn’t reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
 
 # --- Grouped Chat Display ---
 st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
 last_sender = None
 rendered_ids = set()
-for idx, (role, message, timestamp) in enumerate(st.session_state.chat_history):
+for idx, (role, message, timestamp, reply_to) in enumerate(st.session_state.chat_history):
     msg_id = generate_message_id(message, role)
     if msg_id in rendered_ids:
         continue
@@ -183,7 +188,7 @@ for idx, (role, message, timestamp) in enumerate(st.session_state.chat_history):
         st.markdown(f"""
         <div class='message-block {role}-group'>
             <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
-            <div class='timestamp'>{timestamp}</div>
+            <div class='timestamp'>{timestamp}{f'<br><span style="font-size: 11px; color: #999;">In response to: "{reply_to}"</span>' if reply_to else ''}</div>
             <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -201,11 +206,11 @@ with st.container():
 if prompt:
     timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
     content_hash = generate_message_id(prompt.strip(), "user")
-    if content_hash not in [generate_message_id(m, r) for r, m, _ in st.session_state.chat_history]:
-        st.session_state.chat_history.append(("user", prompt.strip(), timestamp))
+    if content_hash not in [generate_message_id(m, r) for r, m, *_ in st.session_state.chat_history]:
+        st.session_state.chat_history.append(("user", prompt.strip(), timestamp, None))
         with st.spinner("Headstart Copilot is thinking..."):
             responses = call_azure_agent(prompt)
-            for role, message, timestamp in responses:
+            for role, message, timestamp, reply_to in responses:
                 msg_id = generate_message_id(message, role)
-                if msg_id not in [generate_message_id(m, r) for r, m, _ in st.session_state.chat_history]:
-                    st.session_state.chat_history.append((role, message, timestamp))
+                if msg_id not in [generate_message_id(m, r) for r, m, *_ in st.session_state.chat_history]:
+                    st.session_state.chat_history.append((role, message, timestamp, prompt.strip() if role == 'assistant' else None))
