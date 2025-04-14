@@ -23,8 +23,6 @@ conn_str = os.getenv("AZURE_AI_CONN_STR")
 project_client = None
 agent = None
 
-debug_mode = st.sidebar.toggle("🛠 Debug Mode", value=False)
-
 try:
     project_client = AIProjectClient.from_connection_string(
         credential=DefaultAzureCredential(),
@@ -40,20 +38,24 @@ st.markdown("""
     <style>
         html, body, .main { height: 100%; background-color: #f3f2f1; }
         .block-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
             max-width: 720px;
             margin: auto;
-            padding: 0;
+            padding-top: 2rem;
+            padding-bottom: 7rem; /* Provide space for the chat input */
         }
-        .chat-scroll {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 1rem;
+        .stChatFloatingInputContainer {
+            bottom: 20px;
+            max-width: 700px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: white;
+            padding: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .message-block {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
         .user-group, .assistant-group {
             display: flex;
@@ -63,7 +65,7 @@ st.markdown("""
         .user-group { align-items: flex-end; }
         .message {
             max-width: 70%;
-            padding: 0.5rem 1rem;
+            padding: 0.8rem 1rem;
             border-radius: 8px;
             margin: 2px 0;
             font-size: 15px;
@@ -73,6 +75,7 @@ st.markdown("""
             background-color: #e6e6e6;
             color: #000;
             align-self: flex-end;
+            text-align: right;
         }
         .assistant-message {
             background-color: #fff;
@@ -82,19 +85,29 @@ st.markdown("""
         .sender-label {
             font-size: 13px;
             font-weight: 600;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.3rem;
         }
         .timestamp {
             font-size: 11px;
             color: #666;
             margin-bottom: 0.5rem;
         }
-        .chat-input-container {
-            position: sticky;
-            bottom: 0;
-            background-color: #fff;
-            padding: 1rem;
-            border-top: 1px solid #ccc;
+        .reply-reference {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 0.5rem;
+            font-style: italic;
+        }
+        /* Make input more visible */
+        .stChatInputContainer {
+            padding: 0.5rem;
+            background-color: white !important;
+            border-radius: 8px !important;
+        }
+        .stChatInput {
+            background-color: white;
+            border: 1px solid #ccc !important;
+            padding: 0.5rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -117,7 +130,7 @@ if st.button("🔄 New Conversation"):
     st.session_state.thread_id = thread.id
     st.session_state.chat_history = []
     st.session_state.seen_hashes = set()
-    st.experimental_rerun()
+    st.rerun()
 
 # --- Generate unique ID ---
 def generate_message_id(content, role):
@@ -125,8 +138,6 @@ def generate_message_id(content, role):
 
 # --- Azure call function ---
 def call_azure_agent(user_input):
-    # Modify assistant replies to prepend reference to user message
-
     try:
         project_client.agents.create_message(
             thread_id=st.session_state.thread_id,
@@ -151,13 +162,10 @@ def call_azure_agent(user_input):
                     role = getattr(msg, 'role', None)
                     text = getattr(msg, 'text', None)
                     content = getattr(text, 'value', '').strip()
-                    if role == 'assistant':
-                        content = f'*<span style="font-size: 13px; color: #999;">In response to: {user_input}</span>*<br><br>' + content
                     if not content:
                         continue
                     timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-                    formatted_content = f'*<span style="font-size: 13px; color: #999;">In response to: {user_input}</span>*<br><br>' + content if role == 'assistant' else content
-                    new_responses.append((role, formatted_content, timestamp, user_input if role == 'assistant' else None))
+                    new_responses.append((role, content, timestamp, user_input if role == 'assistant' else None))
                 except AttributeError:
                     continue
             if new_responses or (time.time() - start_time > timeout):
@@ -169,10 +177,7 @@ def call_azure_agent(user_input):
         return new_responses
 
     except Exception as e:
-        if debug_mode:
-            st.sidebar.error("Exception occurred")
-            st.sidebar.code(traceback.format_exc())
-        return [("assistant", "⚠️ Sorry, I couldn’t reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
+        return [("assistant", "⚠️ Sorry, I couldn't reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
 
 # --- Grouped Chat Display ---
 st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
@@ -184,33 +189,75 @@ for idx, (role, message, timestamp, reply_to) in enumerate(st.session_state.chat
         continue
     rendered_ids.add(msg_id)
     is_new_group = last_sender != role
+    
     if is_new_group:
-        st.markdown(f"""
-        <div class='message-block {role}-group'>
-            <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
-            <div class='timestamp'>{timestamp}{f'<br><span style="font-size: 11px; color: #999;">In response to: "{reply_to}"</span>' if reply_to else ''}</div>
-            <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        if role == 'assistant' and reply_to:
+            st.markdown(f"""
+            <div class='message-block {role}-group'>
+                <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
+                <div class='timestamp'>{timestamp}</div>
+                <div class='reply-reference'>In response to: "{reply_to}"</div>
+                <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class='message-block {role}-group'>
+                <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
+                <div class='timestamp'>{timestamp}</div>
+                <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
+            </div>
+            """, unsafe_allow_html=True)
     else:
         st.markdown(f"<div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>", unsafe_allow_html=True)
     last_sender = role
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Chat input (fixed bottom) ---
-with st.container():
-    with st.markdown('<div class="chat-input-container">', unsafe_allow_html=True):
-        prompt = st.chat_input("Type a message")
+prompt = st.chat_input("Type a message", key="chat_input")
 
 # --- Handle new message ---
 if prompt:
+    # Process the new message
+    user_message = prompt.strip()
     timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-    content_hash = generate_message_id(prompt.strip(), "user")
-    if content_hash not in [generate_message_id(m, r) for r, m, *_ in st.session_state.chat_history]:
-        st.session_state.chat_history.append(("user", prompt.strip(), timestamp, None))
-        with st.spinner("Headstart Copilot is thinking..."):
-            responses = call_azure_agent(prompt)
+    content_hash = generate_message_id(user_message, "user")
+    
+    # Define welcome message
+    welcome_message = """**Welcome to Headstart Copilot** 
+Your intelligent companion for high-impact meetings.
+
+To get started, please enter: 
+• The role of the meeting participant 
+• The company they represent 
+• Your meeting objective
+
+
+Headstart Copilot will generate tailored talking points and strategic questions to help you lead with clarity and confidence."""
+    
+    # Only add if it's a new message
+    if content_hash not in st.session_state.seen_hashes:
+        # Add to seen hashes to prevent duplicates
+        st.session_state.seen_hashes.add(content_hash)
+        
+        # Add to chat history
+        st.session_state.chat_history.append(("user", user_message, timestamp, None))
+        
+        # Check if it's a greeting and directly respond with welcome message
+        if user_message.lower().strip() in ["hi", "hello", "hey", "start"]:
+            st.session_state.chat_history.append(("assistant", welcome_message, timestamp, user_message))
+            st.rerun()
+        else:
+            # Get response from Azure
+            st.info("Headstart Copilot is thinking...")
+            responses = call_azure_agent(user_message)
+            
+            # Add responses to chat history
             for role, message, timestamp, reply_to in responses:
                 msg_id = generate_message_id(message, role)
-                if msg_id not in [generate_message_id(m, r) for r, m, *_ in st.session_state.chat_history]:
-                    st.session_state.chat_history.append((role, message, timestamp, prompt.strip() if role == 'assistant' else None))
+                if msg_id not in st.session_state.seen_hashes:
+                    st.session_state.seen_hashes.add(msg_id)
+                    st.session_state.chat_history.append((role, message, timestamp, reply_to))
+                    
+            # Force a refresh
+            st.rerun()
