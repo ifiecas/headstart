@@ -164,12 +164,14 @@ if st.button("🔄 New Conversation", key="new_conv_header"):
 # Add horizontal line
 st.markdown('<hr style="margin-top: 15px; margin-bottom: 20px; border: 0; height: 1px; background-color: #e0e0e0;">', unsafe_allow_html=True)
 
-# Add footer
+# Add footer directly here, without fixed positioning
 st.markdown("""
     <div class="footer">
-        This is prototype version developed for the Copilot Hackathon (April 2025) and showcases how AI can transform simple meeting details into strategic preparation - in seconds. This demo version is powered by OpenAI's GPT-4o via Azure & hosted on Streamlit.
+        <strong>Prototype Version:</strong> Developed for the Copilot Hackathon (April 2025) | Powered by OpenAI's GPT-4o via Azure & hosted on Streamlit
     </div>
 """, unsafe_allow_html=True)
+
+# No need for extra footer at the end - removing this
 
 # --- Session state ---
 if "chat_history" not in st.session_state:
