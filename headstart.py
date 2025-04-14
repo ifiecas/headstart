@@ -36,7 +36,17 @@ except Exception as e:
 # --- CSS Styling ---
 st.markdown("""
     <style>
-        html, body, .main { height: 100%; background-color: #f3f2f1; }
+        html, body, .main { 
+            height: 100%; 
+            background-color: #f3f2f1; 
+            font-family: 'Segoe UI', sans-serif !important;
+        }
+        * {
+            font-family: 'Segoe UI', sans-serif !important;
+        }
+        h1, h2, h3, p, div, span, button {
+            font-family: 'Segoe UI', sans-serif !important;
+        }
         .block-container {
             max-width: 720px;
             margin: auto;
@@ -109,11 +119,45 @@ st.markdown("""
             border: 1px solid #ccc !important;
             padding: 0.5rem !important;
         }
+        /* Banner styling */
+        .demo-banner {
+            background-color: #0078d4;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        /* Footer styling */
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background-color: #f8f9fa;
+            color: #666;
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            border-top: 1px solid #ddd;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Title ---
-st.title("🤖 Headstart Copilot")
+st.markdown('<h1>Try Headstart Copilot!</h1>', unsafe_allow_html=True)
+st.markdown('<div class="demo-banner">Demo</div>', unsafe_allow_html=True)
+st.markdown('<p>Prepare before meetings with AI-driven insights and smart questions.</p>', unsafe_allow_html=True)
+st.markdown('<p>Type the role of the meeting participant, the company, and your meeting objective. Headstart Copilot will generate tailored insights, talking points, and strategic questions to help you lead with confidence.</p>', unsafe_allow_html=True)
+
+# Add footer
+st.markdown("""
+    <div class="footer">
+        This is prototype version developed for the Copilot Hackathon (April 2025) and showcases how AI can transform simple meeting details into strategic preparation - in second. This demo version is powered by OpenAI's GPT-4o via Azure & hosted on Streamlit.
+    </div>
+""", unsafe_allow_html=True)
 
 # --- Session state ---
 if "chat_history" not in st.session_state:
@@ -190,14 +234,24 @@ for idx, (role, message, timestamp, reply_to) in enumerate(st.session_state.chat
     rendered_ids.add(msg_id)
     is_new_group = last_sender != role
     
+    # Ensure all assistant messages have a reply_to value
+    if role == 'assistant' and not reply_to:
+        reply_to = "your message"  # Fallback if somehow reply_to is missing
+    
     if is_new_group:
-        if role == 'assistant' and reply_to:
+        if role == 'assistant':
+            # Always show "In response to" for all assistant messages with proper formatting
+            # First add message header group
             st.markdown(f"""
             <div class='message-block {role}-group'>
                 <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
                 <div class='timestamp'>{timestamp}</div>
-                <div class='reply-reference'>In response to: "{reply_to}"</div>
-                <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
+                <div class='reply-reference'>*In response to: "{reply_to}"*</div>
+            """, unsafe_allow_html=True)
+            
+            # Then add the message content
+            st.markdown(f"""
+                <div class='message assistant-message'>{message}</div>
             </div>
             """, unsafe_allow_html=True)
         else:
@@ -225,16 +279,12 @@ if prompt:
     
     # Define welcome message
     welcome_message = """Welcome to Headstart Copilot
-
 Your intelligent companion for high-impact meetings.
 
 
 To get started, please enter:
-
 • The **role** of the meeting participant
-
 • The **company** they represent
-
 • Your **meeting objective**
 
 
@@ -250,19 +300,44 @@ Headstart Copilot will generate tailored talking points and strategic questions 
         
         # Check if it's a greeting and directly respond with welcome message
         if user_message.lower().strip() in ["hi", "hello", "hey", "start"]:
+            # For greetings, use welcome message
             st.session_state.chat_history.append(("assistant", welcome_message, timestamp, user_message))
             st.rerun()
         else:
-            # Get response from Azure
-            st.info("Headstart Copilot is thinking...")
-            responses = call_azure_agent(user_message)
+            # Show thinking state
+            thinking_placeholder = st.empty()
+            thinking_placeholder.info("Headstart Copilot is thinking...")
             
-            # Add responses to chat history
-            for role, message, timestamp, reply_to in responses:
-                msg_id = generate_message_id(message, role)
-                if msg_id not in st.session_state.seen_hashes:
-                    st.session_state.seen_hashes.add(msg_id)
-                    st.session_state.chat_history.append((role, message, timestamp, reply_to))
-                    
+            # Get response from Azure
+            try:
+                # Call Azure API
+                responses = call_azure_agent(user_message)
+                
+                # Clear thinking message
+                thinking_placeholder.empty()
+                
+                # Add responses to chat history
+                if responses:
+                    for role, message, timestamp, reply_to in responses:
+                        # Double-check that the reply_to is set properly
+                        if not reply_to:
+                            reply_to = user_message
+                            
+                        msg_id = generate_message_id(message, role)
+                        if msg_id not in st.session_state.seen_hashes:
+                            st.session_state.seen_hashes.add(msg_id)
+                            st.session_state.chat_history.append((role, message, timestamp, reply_to))
+                else:
+                    # No response received
+                    error_msg = "No response received from Azure. Please try again."
+                    st.session_state.chat_history.append(("assistant", error_msg, timestamp, user_message))
+            except Exception as e:
+                # Clear thinking message
+                thinking_placeholder.empty()
+                
+                # Add error to chat history
+                error_msg = f"⚠️ Error: {str(e)}"
+                st.session_state.chat_history.append(("assistant", error_msg, timestamp, user_message))
+                
             # Force a refresh
             st.rerun()
