@@ -1,347 +1,126 @@
 import streamlit as st
-import traceback
-from dotenv import load_dotenv
-from azure.ai.projects import AIProjectClient
-from azure.identity import DefaultAzureCredential
 import os
 import time
 import hashlib
 from datetime import datetime
+import openai
+from dotenv import load_dotenv
 
-# --- Set page config with chat mode ---
+# --- Load environment variables ---
+load_dotenv()
+openai.api_type = "azure"
+openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
+openai.api_version = "2023-12-01-preview"
+openai.api_key = os.getenv("AZURE_OPENAI_KEY")
+
+# --- Set page config ---
 st.set_page_config(
     page_title="Headstart Copilot",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- Load environment variables ---
-load_dotenv()
-
-# --- Azure AI Foundry setup ---
-conn_str = os.getenv("AZURE_AI_CONN_STR")
-project_client = None
-agent = None
-
-try:
-    project_client = AIProjectClient.from_connection_string(
-        credential=DefaultAzureCredential(),
-        conn_str=conn_str
-    )
-    agent = project_client.agents.get_agent("asst_Z9DXOAm2RZnDkZtrg0O9BXna")
-except Exception as e:
-    st.error(f"❌ Failed to initialize Azure AI Project Client: {e}")
-    st.stop()
-
 # --- CSS Styling ---
 st.markdown("""
     <style>
-        html, body, .main { 
-            height: 100%; 
-            background-color: #f3f2f1; 
-            font-family: 'Segoe UI', sans-serif !important;
-        }
-        * {
-            font-family: 'Segoe UI', sans-serif !important;
-        }
-        h1, h2, h3, p, div, span, button {
-            font-family: 'Segoe UI', sans-serif !important;
-        }
-        .block-container {
-            max-width: 720px;
-            margin: auto;
-            padding-top: 2rem;
-            padding-bottom: 7rem; /* Provide space for the chat input */
-        }
-        .stChatFloatingInputContainer {
-            bottom: 20px;
-            max-width: 700px;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: white;
-            padding: 0.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .message-block {
-            margin-bottom: 1.5rem;
-        }
-        .user-group, .assistant-group {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
+        html, body, .main { background-color: #f3f2f1; font-family: 'Segoe UI', sans-serif; }
+        .block-container { max-width: 720px; margin: auto; padding-top: 2rem; padding-bottom: 7rem; }
+        .stChatFloatingInputContainer { bottom: 20px; max-width: 700px; left: 50%; transform: translateX(-50%); }
+        .message-block { margin-bottom: 1.5rem; }
         .user-group { align-items: flex-end; }
-        .message {
-            max-width: 70%;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            margin: 2px 0;
-            font-size: 15px;
-            line-height: 1.4;
-        }
-        .user-message {
-            background-color: #e6e6e6;
-            color: #000;
-            align-self: flex-end;
-            text-align: right;
-        }
-        .assistant-message {
-            background-color: #fff;
-            border: 1px solid #ccc;
-            color: #000;
-        }
-        .sender-label {
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 0.3rem;
-        }
-        .timestamp {
-            font-size: 11px;
-            color: #666;
-            margin-bottom: 0.5rem;
-        }
-        .reply-reference {
-            font-size: 13px;
-            color: #999;
-            margin-bottom: 0.5rem;
-            font-style: italic;
-        }
-        /* Make input more visible */
-        .stChatInputContainer {
-            padding: 0.5rem;
-            background-color: white !important;
-            border-radius: 8px !important;
-        }
-        .stChatInput {
-            background-color: white;
-            border: 1px solid #ccc !important;
-            padding: 0.5rem !important;
-        }
-        /* Banner styling */
-        .demo-banner {
-            background-color: #0078d4;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-        /* Footer styling */
-        .footer {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            background-color: #f8f9fa;
-            color: #666;
-            text-align: center;
-            padding: 10px;
-            font-size: 12px;
-            border-top: 1px solid #ddd;
-        }
+        .assistant-group { align-items: flex-start; }
+        .message { max-width: 70%; padding: 0.8rem 1rem; border-radius: 8px; margin: 2px 0; font-size: 15px; }
+        .user-message { background-color: #e6e6e6; color: #000; text-align: right; }
+        .assistant-message { background-color: #fff; border: 1px solid #ccc; color: #000; }
+        .sender-label { font-size: 13px; font-weight: 600; margin-bottom: 0.3rem; }
+        .timestamp { font-size: 11px; color: #666; margin-bottom: 0.5rem; }
+        .reply-reference { font-size: 13px; color: #999; font-style: italic; }
+        .footer { position: fixed; left: 0; bottom: 0; width: 100%; background-color: #f8f9fa; text-align: center; padding: 10px; font-size: 12px; border-top: 1px solid #ddd; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Title ---
-st.markdown('<div class="header-container">', unsafe_allow_html=True)
+# --- Title and Description ---
 st.markdown('<h1>Try Headstart Copilot!</h1>', unsafe_allow_html=True)
 st.markdown('<div class="demo-banner">Demo</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('<p class="description">Type the role of the meeting participant, the company, and your meeting objective.<br>Headstart Copilot will generate tailored insights, talking points, and strategic questions to help you lead with confidence.</p>', unsafe_allow_html=True)
-
-# Reset Conversation button with unique key
-if st.button("🔄 New Conversation", key="new_conv_header"):
-    thread = project_client.agents.create_thread()
-    st.session_state.thread_id = thread.id
-    st.session_state.chat_history = []
-    st.session_state.seen_hashes = set()
-    st.rerun()
-    
-# Add horizontal line
-st.markdown('<hr style="margin-top: 15px; margin-bottom: 20px; border: 0; height: 1px; background-color: #e0e0e0;">', unsafe_allow_html=True)
-
-# Add footer directly here, without fixed positioning
-st.markdown("""
-    <div class="footer">
-        <strong>Prototype Version:</strong> Developed for the Copilot Hackathon (April 2025) | Powered by OpenAI's GPT-4o via Azure & hosted on Streamlit
-    </div>
-""", unsafe_allow_html=True)
-
-# No need for extra footer at the end - removing this
+st.markdown('<p class="description">Type the role of the meeting participant, the company, and your meeting objective.</p>', unsafe_allow_html=True)
 
 # --- Session state ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "thread_id" not in st.session_state:
-    thread = project_client.agents.create_thread()
-    st.session_state.thread_id = thread.id
 if "seen_hashes" not in st.session_state:
     st.session_state.seen_hashes = set()
-
-# --- Reset Conversation button (original code) ---
-# Removing this button as it creates a duplicate
 
 # --- Generate unique ID ---
 def generate_message_id(content, role):
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
-# --- Azure call function ---
-def call_azure_agent(user_input):
+# --- Call Azure OpenAI agent ---
+def call_openai_agent(user_input):
     try:
-        project_client.agents.create_message(
-            thread_id=st.session_state.thread_id,
-            role="user",
-            content=user_input
+        response = openai.ChatCompletion.create(
+            engine="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are Headstart Copilot, an intelligent assistant that helps users prepare for meetings..."},
+                {"role": "user", "content": user_input}
+            ]
         )
-
-        project_client.agents.create_and_process_run(
-            thread_id=st.session_state.thread_id,
-            agent_id=agent.id
-        )
-
-        start_time = time.time()
-        timeout = 15
-        new_responses = []
-
-        while True:
-            messages = project_client.agents.list_messages(thread_id=st.session_state.thread_id)
-
-            for msg in messages.text_messages:
-                try:
-                    role = getattr(msg, 'role', None)
-                    text = getattr(msg, 'text', None)
-                    content = getattr(text, 'value', '').strip()
-                    if not content:
-                        continue
-                    timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-                    new_responses.append((role, content, timestamp, user_input if role == 'assistant' else None))
-                except AttributeError:
-                    continue
-            if new_responses or (time.time() - start_time > timeout):
-                break
-            time.sleep(0.5)
-
-        if not new_responses:
-            return [("assistant", "⚠️ No response received from Azure AI within timeout.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
-        return new_responses
-
+        answer = response["choices"][0]["message"]["content"].strip()
+        return [("assistant", answer, datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input)]
     except Exception as e:
-        return [("assistant", "⚠️ Sorry, I couldn't reach Azure right now. Please try again shortly.", datetime.now().strftime("%d/%m/%Y %I:%M %p"), None)]
+        return [("assistant", f"⚠️ Error: {str(e)}", datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input)]
 
-# --- Grouped Chat Display ---
-st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+# --- Chat history UI ---
 last_sender = None
 rendered_ids = set()
-for idx, (role, message, timestamp, reply_to) in enumerate(st.session_state.chat_history):
+for role, message, timestamp, reply_to in st.session_state.chat_history:
     msg_id = generate_message_id(message, role)
     if msg_id in rendered_ids:
         continue
     rendered_ids.add(msg_id)
-    is_new_group = last_sender != role
-    
-    # Ensure all assistant messages have a reply_to value
-    if role == 'assistant' and not reply_to:
-        reply_to = "your message"  # Fallback if somehow reply_to is missing
-    
-    if is_new_group:
-        if role == 'assistant':
-            # Always show "In response to" for all assistant messages with proper formatting
-            st.markdown(f"""
-            <div class='message-block {role}-group'>
-                <div class='sender-label'>{'You' if role == 'user' else 'Headstart Copilot'}</div>
-                <div class='timestamp'>{timestamp}</div>
-                <div class='reply-reference'>*In response to: "{reply_to}"*</div>
-                <div class='message assistant-message'>{message}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class='message-block {role}-group'>
-                <div class='sender-label'>{'You' if role == 'user' else 'Headstart Copilot'}</div>
-                <div class='timestamp'>{timestamp}</div>
-                <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    reply_to = reply_to or "your message"
+    if role == 'assistant':
+        st.markdown(f"""
+        <div class='message-block assistant-group'>
+            <div class='sender-label'>Headstart Copilot</div>
+            <div class='timestamp'>{timestamp}</div>
+            <div class='reply-reference'>*In response to: \"{reply_to}\"*</div>
+            <div class='message assistant-message'>{message}</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.markdown(f"<div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>", unsafe_allow_html=True)
-    last_sender = role
-st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='message-block user-group'>
+            <div class='sender-label'>You</div>
+            <div class='timestamp'>{timestamp}</div>
+            <div class='message user-message'>{message}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# --- Chat input (fixed bottom) ---
-prompt = st.chat_input("Type a message", key="chat_input")
-
-# --- Handle new message ---
+# --- Chat input ---
+prompt = st.chat_input("Type a message")
 if prompt:
-    # Process the new message
     user_message = prompt.strip()
     timestamp = datetime.now().strftime("%d/%m/%Y %I:%M %p")
     content_hash = generate_message_id(user_message, "user")
-    
-    # Define welcome message
-    welcome_message = """Welcome to Headstart Copilot
-Your intelligent companion for high-impact meetings.
 
-
-To get started, please enter:
-• The **role** of the meeting participant
-• The **company** they represent
-• Your **meeting objective**
-
-
-Headstart Copilot will generate tailored talking points and strategic questions to help you lead with clarity and confidence."""
-    
-    # Only add if it's a new message
     if content_hash not in st.session_state.seen_hashes:
-        # Add to seen hashes to prevent duplicates
         st.session_state.seen_hashes.add(content_hash)
-        
-        # Add to chat history
         st.session_state.chat_history.append(("user", user_message, timestamp, None))
-        
-        # Check if it's a greeting and directly respond with welcome message
-        if user_message.lower().strip() in ["hi", "hello", "hey", "start"]:
-            # For greetings, use welcome message
+
+        if user_message.lower() in ["hi", "hello", "hey", "start"]:
+            welcome_message = """Welcome to Headstart Copilot\nYour intelligent companion for high-impact meetings.\n\nTo get started, please enter:\n• The **role** of the meeting participant\n• The **company** they represent\n• Your **meeting objective**"""
             st.session_state.chat_history.append(("assistant", welcome_message, timestamp, user_message))
-            st.rerun()
         else:
-            # Show thinking state
             thinking_placeholder = st.empty()
             thinking_placeholder.info("Headstart Copilot is thinking...")
-            
-            # Get response from Azure
-            try:
-                # Call Azure API
-                responses = call_azure_agent(user_message)
-                
-                # Clear thinking message
-                thinking_placeholder.empty()
-                
-                # Add responses to chat history
-                if responses:
-                    for role, message, timestamp, reply_to in responses:
-                        # Double-check that the reply_to is set properly
-                        if not reply_to:
-                            reply_to = user_message
-                            
-                        msg_id = generate_message_id(message, role)
-                        if msg_id not in st.session_state.seen_hashes:
-                            st.session_state.seen_hashes.add(msg_id)
-                            st.session_state.chat_history.append((role, message, timestamp, reply_to))
-                else:
-                    # No response received
-                    error_msg = "No response received from Azure. Please try again."
-                    st.session_state.chat_history.append(("assistant", error_msg, timestamp, user_message))
-            except Exception as e:
-                # Clear thinking message
-                thinking_placeholder.empty()
-                
-                # Add error to chat history
-                error_msg = f"⚠️ Error: {str(e)}"
-                st.session_state.chat_history.append(("assistant", error_msg, timestamp, user_message))
-                
-            # Force a refresh
-            st.rerun()
+            responses = call_openai_agent(user_message)
+            thinking_placeholder.empty()
+            st.session_state.chat_history.extend(responses)
+        st.rerun()
+
+# --- Footer ---
+st.markdown("""
+    <div class="footer">
+        <strong>Prototype Version:</strong> Developed for the Copilot Hackathon (April 2025) | Powered by OpenAI's GPT-4o via Azure & hosted on Streamlit
+    </div>
+""", unsafe_allow_html=True)
