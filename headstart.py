@@ -3,16 +3,17 @@ import os
 import time
 import hashlib
 from datetime import datetime
+import openai
 from dotenv import load_dotenv
 
 # --- Load environment variables ---
 load_dotenv()
 
-client = AzureOpenAI(
-    api_key=os.getenv("AZURE_OPENAI_KEY"),
-    api_version="2023-12-01-preview",
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
-)
+# --- Set OpenAI API config ---
+openai.api_type = "azure"
+openai.api_version = "2023-12-01-preview"
+openai.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
+openai.api_key = os.getenv("AZURE_OPENAI_KEY")
 
 # --- Set page config ---
 st.set_page_config(
@@ -58,14 +59,14 @@ def generate_message_id(content, role):
 # --- Call Azure OpenAI agent ---
 def call_openai_agent(user_input):
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        response = openai.ChatCompletion.create(
+            engine="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are Headstart Copilot, an intelligent assistant that helps users prepare for meetings..."},
                 {"role": "user", "content": user_input}
             ]
         )
-        answer = response.choices[0].message.content.strip()
+        answer = response["choices"][0]["message"]["content"].strip()
         return [("assistant", answer, datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input)]
     except Exception as e:
         return [("assistant", f"⚠️ Error: {str(e)}", datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input)]
