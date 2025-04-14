@@ -8,7 +8,7 @@ import time
 import hashlib
 from datetime import datetime
 
-# --- Page config ---
+# --- Set page config with chat mode ---
 st.set_page_config(
     page_title="Headstart Copilot",
     layout="wide",
@@ -147,15 +147,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Title ---
+st.markdown('<div class="header-container">', unsafe_allow_html=True)
 st.markdown('<h1>Try Headstart Copilot!</h1>', unsafe_allow_html=True)
 st.markdown('<div class="demo-banner">Demo</div>', unsafe_allow_html=True)
-st.markdown('<p>Prepare before meetings with AI-driven insights and smart questions.</p>', unsafe_allow_html=True)
-st.markdown('<p>Type the role of the meeting participant, the company, and your meeting objective. Headstart Copilot will generate tailored insights, talking points, and strategic questions to help you lead with confidence.</p>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<p class="description">Type the role of the meeting participant, the company, and your meeting objective.<br>Headstart Copilot will generate tailored insights, talking points, and strategic questions to help you lead with confidence.</p>', unsafe_allow_html=True)
+
+# Reset Conversation button with unique key
+if st.button("🔄 New Conversation", key="new_conv_header"):
+    thread = project_client.agents.create_thread()
+    st.session_state.thread_id = thread.id
+    st.session_state.chat_history = []
+    st.session_state.seen_hashes = set()
+    st.rerun()
+    
+# Add horizontal line
+st.markdown('<hr style="margin-top: 15px; margin-bottom: 20px; border: 0; height: 1px; background-color: #e0e0e0;">', unsafe_allow_html=True)
 
 # Add footer
 st.markdown("""
     <div class="footer">
-        This is prototype version developed for the Copilot Hackathon (April 2025) and showcases how AI can transform simple meeting details into strategic preparation - in second. This demo version is powered by OpenAI's GPT-4o via Azure & hosted on Streamlit.
+        This is prototype version developed for the Copilot Hackathon (April 2025) and showcases how AI can transform simple meeting details into strategic preparation - in seconds. This demo version is powered by OpenAI's GPT-4o via Azure & hosted on Streamlit.
     </div>
 """, unsafe_allow_html=True)
 
@@ -168,13 +180,8 @@ if "thread_id" not in st.session_state:
 if "seen_hashes" not in st.session_state:
     st.session_state.seen_hashes = set()
 
-# --- Reset Conversation ---
-if st.button("🔄 New Conversation"):
-    thread = project_client.agents.create_thread()
-    st.session_state.thread_id = thread.id
-    st.session_state.chat_history = []
-    st.session_state.seen_hashes = set()
-    st.rerun()
+# --- Reset Conversation button (original code) ---
+# Removing this button as it creates a duplicate
 
 # --- Generate unique ID ---
 def generate_message_id(content, role):
@@ -241,23 +248,18 @@ for idx, (role, message, timestamp, reply_to) in enumerate(st.session_state.chat
     if is_new_group:
         if role == 'assistant':
             # Always show "In response to" for all assistant messages with proper formatting
-            # First add message header group
             st.markdown(f"""
             <div class='message-block {role}-group'>
-                <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
+                <div class='sender-label'>{'You' if role == 'user' else 'Headstart Copilot'}</div>
                 <div class='timestamp'>{timestamp}</div>
                 <div class='reply-reference'>*In response to: "{reply_to}"*</div>
-            """, unsafe_allow_html=True)
-            
-            # Then add the message content
-            st.markdown(f"""
                 <div class='message assistant-message'>{message}</div>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
             <div class='message-block {role}-group'>
-                <div class='sender-label'>{'User Demo' if role == 'user' else 'Headstart Copilot'}</div>
+                <div class='sender-label'>{'You' if role == 'user' else 'Headstart Copilot'}</div>
                 <div class='timestamp'>{timestamp}</div>
                 <div class='message {'user-message' if role == 'user' else 'assistant-message'}'>{message}</div>
             </div>
