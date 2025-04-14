@@ -224,13 +224,18 @@ if prompt:
     content_hash = generate_message_id(user_message, "user")
     
     # Define welcome message
-    welcome_message = """**Welcome to Headstart Copilot** 
+    welcome_message = """Welcome to Headstart Copilot
+
 Your intelligent companion for high-impact meetings.
 
-To get started, please enter: 
-• The role of the meeting participant 
-• The company they represent 
-• Your meeting objective
+
+To get started, please enter:
+
+• The **role** of the meeting participant
+
+• The **company** they represent
+
+• Your **meeting objective**
 
 
 Headstart Copilot will generate tailored talking points and strategic questions to help you lead with clarity and confidence."""
