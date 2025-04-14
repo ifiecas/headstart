@@ -1,4 +1,3 @@
-azure-ai-resources
-azure-identity
 streamlit
+openai
 python-dotenv
