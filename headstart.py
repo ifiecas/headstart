@@ -360,6 +360,22 @@ if "feedbacks" not in st.session_state:
     st.session_state.feedbacks = {}
 if "last_activity" not in st.session_state:
     st.session_state.last_activity = datetime.now()
+    
+# --- Fix existing chat_history format if needed ---
+# This ensures backward compatibility with existing sessions
+if st.session_state.chat_history:
+    fixed_history = []
+    for item in st.session_state.chat_history:
+        if len(item) == 4:  # Old format without message_id
+            role, message, timestamp, reply_to = item
+            message_id = generate_message_id(message, role)
+            fixed_history.append((role, message, timestamp, reply_to, message_id))
+        elif len(item) == 5:  # New format with message_id
+            fixed_history.append(item)
+        else:
+            # Skip invalid items
+            continue
+    st.session_state.chat_history = fixed_history
 
 # --- Helper functions ---
 def generate_message_id(content, role):
@@ -420,10 +436,14 @@ def call_openai_agent(user_input, system_prompt=None):
         # Create message history
         messages = [{"role": "system", "content": system_prompt}]
         
-        # Add relevant chat history (last 5 messages)
+        # Add relevant chat history (last 10 messages)
         relevant_history = st.session_state.chat_history[-10:] if len(st.session_state.chat_history) > 0 else []
-        for role, content, _, _ in relevant_history:
-            messages.append({"role": role, "content": content})
+        for chat_item in relevant_history:
+            # Handle different formats of chat history items
+            if len(chat_item) >= 2:  # Need at minimum role and content
+                role = chat_item[0]
+                content = chat_item[1]
+                messages.append({"role": role, "content": content})
         
         # Add current user message
         messages.append({"role": "user", "content": user_input})
@@ -442,12 +462,13 @@ def call_openai_agent(user_input, system_prompt=None):
         answer = response["choices"][0]["message"]["content"].strip()
         message_id = generate_message_id(answer, "assistant")
         
-        # Simulate typing animation
+        # Create response with 5 elements (role, content, timestamp, reply_to, message_id)
         return [("assistant", answer, datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input, message_id)]
     
     except Exception as e:
         error_message = f"⚠️ Error: {str(e)}"
-        return [("assistant", error_message, datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input, None)]
+        message_id = generate_message_id(error_message, "assistant")
+        return [("assistant", error_message, datetime.now().strftime("%d/%m/%Y %I:%M %p"), user_input, message_id)]
 
 def simulate_typing(message):
     """Simulate typing animation for AI responses"""
@@ -608,7 +629,18 @@ if len(st.session_state.chat_history) == 0:
     </div>
     """, unsafe_allow_html=True)
 else:
-    for role, message, timestamp, reply_to, message_id in st.session_state.chat_history:
+    for chat_item in st.session_state.chat_history:
+        # Check if the chat item has 5 elements (including message_id)
+        if len(chat_item) == 5:
+            role, message, timestamp, reply_to, message_id = chat_item
+        # Backwards compatibility with old format (4 elements)
+        elif len(chat_item) == 4:
+            role, message, timestamp, reply_to = chat_item
+            message_id = None
+        else:
+            # Skip invalid format
+            continue
+            
         st.markdown(
             format_chat_message(role, message, timestamp, reply_to, message_id),
             unsafe_allow_html=True
@@ -637,10 +669,27 @@ if prompt:
             message_id = generate_message_id(welcome_message, "assistant")
             st.session_state.chat_history.append(("assistant", welcome_message, timestamp, user_message, message_id))
         else:
-            # Process the user message
-            simulate_typing(user_message)
-            responses = call_openai_agent(user_message)
-            st.session_state.chat_history.extend(responses)
+            try:
+                # Process the user message
+                simulate_typing(user_message)
+                responses = call_openai_agent(user_message)
+                
+                # Ensure responses have the correct format before adding them
+                fixed_responses = []
+                for response in responses:
+                    if len(response) == 5:  # Already has message_id
+                        fixed_responses.append(response)
+                    elif len(response) == 4:  # Needs message_id
+                        role, message, ts, reply = response
+                        msg_id = generate_message_id(message, role)
+                        fixed_responses.append((role, message, ts, reply, msg_id))
+                
+                st.session_state.chat_history.extend(fixed_responses)
+            except Exception as e:
+                # Handle any errors
+                error_message = f"⚠️ Error: {str(e)}"
+                message_id = generate_message_id(error_message, "assistant")
+                st.session_state.chat_history.append(("assistant", error_message, timestamp, user_message, message_id))
         
         # Update last activity time
         st.session_state.last_activity = datetime.now()
@@ -685,15 +734,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Check for inactivity timeout (5 minutes)
-if datetime.now().timestamp() - st.session_state.last_activity.timestamp() > 300:
-    inactivity_message = "It looks like you've been inactive for a while. Can I help you with anything else?"
-    # Only add this message if it's not already the last message
-    if (len(st.session_state.chat_history) == 0 or 
-        st.session_state.chat_history[-1][0] != "assistant" or 
-        st.session_state.chat_history[-1][1] != inactivity_message):
-        message_id = generate_message_id(inactivity_message, "assistant")
-        st.session_state.chat_history.append(
-            ("assistant", inactivity_message, datetime.now().strftime("%d/%m/%Y %I:%M %p"), None, message_id)
-        )
-        st.session_state.last_activity = datetime.now()
-        st.rerun()
+try:
+    if datetime.now().timestamp() - st.session_state.last_activity.timestamp() > 300:
+        inactivity_message = "It looks like you've been inactive for a while. Can I help you with anything else?"
+        # Only add this message if it's not already the last message
+        if (len(st.session_state.chat_history) == 0 or 
+            (len(st.session_state.chat_history) > 0 and 
+             (len(st.session_state.chat_history[-1]) < 2 or 
+              st.session_state.chat_history[-1][0] != "assistant" or 
+              st.session_state.chat_history[-1][1] != inactivity_message))):
+            message_id = generate_message_id(inactivity_message, "assistant")
+            st.session_state.chat_history.append(
+                ("assistant", inactivity_message, datetime.now().strftime("%d/%m/%Y %I:%M %p"), None, message_id)
+            )
+            st.session_state.last_activity = datetime.now()
+            st.rerun()
+except Exception as e:
+    # Silently handle any errors in the inactivity check
+    pass
