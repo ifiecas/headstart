@@ -1,7 +1,10 @@
+# Add necessary imports at the top
 import streamlit as st
 import os
 import time
 import hashlib
+import re
+import json
 from datetime import datetime
 import openai
 from dotenv import load_dotenv
@@ -489,37 +492,99 @@ def format_chat_message(role, message, timestamp, reply_to=None, message_id=None
     message_class = "user-message" if is_user else "assistant-message"
     sender_label = "You" if is_user else "Headstart Copilot"
     
-    # Format the message with Markdown
-    # Replace newlines with proper paragraph breaks for better readability
+    # Format message content - Handle markdown-like syntax
     formatted_message = ""
-    for paragraph in message.split('\n\n'):
-        if paragraph.strip():
-            # Check if this is a list item (starts with - or *)
-            is_list = False
-            list_items = []
-            for line in paragraph.split('\n'):
-                line = line.strip()
-                if line and (line.startswith('- ') or line.startswith('* ')):
-                    is_list = True
-                    item_content = line[2:].strip()
-                    list_items.append(f"<li>{item_content}</li>")
-            
-            if is_list:
-                formatted_message += f"<ul class='message-list'>{''.join(list_items)}</ul>"
-            else:
-                # Regular paragraph
-                lines = [line for line in paragraph.split('\n') if line.strip()]
-                if lines:
-                    formatted_message += f"<p>{'<br>'.join(lines)}</p>"
     
-    # If message has no paragraphs, just use the original with br tags
+    # Process message content
+    if message.strip():
+        # Check for bullet points and create HTML list if needed
+        if re.search(r'^\s*[\*\-]\s+', message, re.MULTILINE):
+            # Split by lines and process
+            lines = message.split('\n')
+            current_list = []
+            paragraph_text = ""
+            in_list = False
+            
+            for line in lines:
+                line = line.strip()
+                # Check if this is a list item
+                if re.match(r'^\s*[\*\-]\s+', line):
+                    # If we have paragraph text, add it first
+                    if paragraph_text and not in_list:
+                        formatted_message += f"<p>{paragraph_text}</p>"
+                        paragraph_text = ""
+                    
+                    # Start list if not already in one
+                    if not in_list:
+                        in_list = True
+                        current_list = []
+                    
+                    # Extract and add the list item content
+                    item_content = re.sub(r'^\s*[\*\-]\s+', '', line)
+                    # Process bold text in list items
+                    item_content = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', item_content)
+                    current_list.append(f"<li>{item_content}</li>")
+                # Not a list item
+                else:
+                    # If we were in a list, end it
+                    if in_list:
+                        formatted_message += f"<ul>{''.join(current_list)}</ul>"
+                        current_list = []
+                        in_list = False
+                    
+                    # Handle horizontal rules
+                    if line == '---':
+                        if paragraph_text:
+                            formatted_message += f"<p>{paragraph_text}</p>"
+                            paragraph_text = ""
+                        formatted_message += "<hr>"
+                    # Add to paragraph if not empty
+                    elif line:
+                        # Process bold text
+                        line = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', line)
+                        if paragraph_text:
+                            paragraph_text += f" {line}"
+                        else:
+                            paragraph_text = line
+                    # Empty line ends paragraph
+                    elif paragraph_text:
+                        formatted_message += f"<p>{paragraph_text}</p>"
+                        paragraph_text = ""
+            
+            # Add any remaining list items
+            if in_list and current_list:
+                formatted_message += f"<ul>{''.join(current_list)}</ul>"
+            
+            # Add any remaining paragraph text
+            if paragraph_text:
+                formatted_message += f"<p>{paragraph_text}</p>"
+        
+        else:
+            # No bullet points, process as regular text with paragraphs
+            paragraphs = re.split(r'\n\s*\n', message)
+            for paragraph in paragraphs:
+                if paragraph.strip():
+                    # Check for horizontal rule
+                    if paragraph.strip() == '---':
+                        formatted_message += "<hr>"
+                    else:
+                        # Process bold text
+                        paragraph = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', paragraph)
+                        # Replace single newlines with <br>
+                        paragraph = paragraph.replace('\n', '<br>')
+                        formatted_message += f"<p>{paragraph}</p>"
+    
+    # If message processing failed or no content, use simple fallback
     if not formatted_message:
         formatted_message = f"<p>{message.replace('\n', '<br>')}</p>"
     
     # Reply reference
     reply_html = ""
     if reply_to and not is_user:
-        reply_html = f"""<div class='reply-reference'>Re: "{reply_to[:50]}{'...' if len(reply_to) > 50 else ''}"</div>"""
+        shortened_reply = reply_to[:50] + ('...' if len(reply_to) > 50 else '')
+        # Escape any HTML in the reply text
+        shortened_reply = shortened_reply.replace('<', '&lt;').replace('>', '&gt;')
+        reply_html = f"""<div class='reply-reference'>Re: "{shortened_reply}"</div>"""
     
     # Feedback buttons for assistant messages
     feedback_html = ""
@@ -549,9 +614,18 @@ def call_openai_agent(user_input, system_prompt=None):
         # Default system prompt if none provided
         if not system_prompt:
             system_prompt = """You are Headstart Copilot, an intelligent assistant that helps users prepare for meetings.
+            
             Your goal is to help users prepare effectively by providing relevant information, suggested talking points,
             and strategic advice tailored to their meeting context. Be concise, practical, and focus on actionable insights.
-            Consider the user's role, the company they're meeting with, and their objective to provide personalized guidance."""
+            
+            Consider the user's role, the company they're meeting with, and their objective to provide personalized guidance.
+            
+            Format your responses in a clean, structured way:
+            - Use bullet points for lists
+            - Use bold text with ** for headings and important points
+            - Use --- to create section separators
+            - Keep paragraphs short and focused
+            - Group related ideas together"""
         
         # Add contextual information if available
         if st.session_state.user_profile["name"]:
@@ -606,7 +680,8 @@ def simulate_typing(message):
     """, unsafe_allow_html=True)
     
     # Simulate thinking time based on message length
-    thinking_time = min(len(message) / 100, 2.5)
+    # Shorter timing for a better user experience
+    thinking_time = min(len(message) / 200, 1.5)
     time.sleep(thinking_time)
     
     typing_placeholder.empty()
