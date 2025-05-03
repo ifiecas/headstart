@@ -44,9 +44,39 @@ st.markdown(f"""
         
         /* Layout */
         .block-container {{ 
-            max-width: 800px; 
+            max-width: 900px; 
             margin: auto; 
-            padding: 1rem 2rem 8rem 2rem;
+            padding: 1rem 3rem 8rem 3rem;
+        }}
+        
+        /* Typography improvements */
+        p {{
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }}
+        
+        .message p:last-child {{
+            margin-bottom: 0;
+        }}
+        
+        /* Message list styling */
+        .message-list {{
+            margin: 8px 0;
+            padding-left: 20px;
+        }}
+        
+        .message-list li {{
+            margin-bottom: 6px;
+        }}
+        
+        /* Bold and emphasis */
+        .message strong, .message b {{
+            font-weight: 600;
+        }}
+        
+        .message em, .message i {{
+            font-style: italic;
+            color: inherit;
         }}
         
         /* Header */
@@ -91,23 +121,63 @@ st.markdown(f"""
         }}
         
         /* Chat container */
+        .chat-container-wrapper {{
+            position: relative;
+            margin-bottom: 2rem;
+        }}
+        
         .chat-container {{
             background-color: white;
             border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            padding: 1.5rem;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            padding: 2rem;
             margin-bottom: 2rem;
-            min-height: 400px;
+            min-height: 450px;
             display: flex;
             flex-direction: column;
+            position: relative;
+        }}
+        
+        /* Date separator */
+        .date-separator {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 1.5rem 0;
+            position: relative;
+        }}
+        
+        .date-separator::before {{
+            content: '';
+            flex-grow: 1;
+            border-top: 1px solid #e2e8f0;
+            margin-right: 1rem;
+        }}
+        
+        .date-separator::after {{
+            content: '';
+            flex-grow: 1;
+            border-top: 1px solid #e2e8f0;
+            margin-left: 1rem;
+        }}
+        
+        .date-separator span {{
+            background-color: #f8fafc;
+            border-radius: 20px;
+            padding: 0.25rem 1rem;
+            font-size: 12px;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }}
         
         /* Message blocks */
         .message-block {{
             display: flex;
             flex-direction: column;
-            margin-bottom: 1.5rem;
-            max-width: 90%;
+            margin-bottom: 2rem;
+            max-width: 85%;
+            position: relative;
         }}
         
         .user-group {{
@@ -120,25 +190,51 @@ st.markdown(f"""
         
         /* Message bubbles */
         .message {{
-            padding: 0.8rem 1.2rem;
-            border-radius: 18px;
-            margin: 2px 0;
+            padding: 1rem 1.4rem;
+            border-radius: 16px;
             font-size: 15px;
-            line-height: 1.5;
+            line-height: 1.6;
             position: relative;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }}
         
         .user-message {{
             background-color: {PRIMARY_COLOR};
             color: white;
             border-bottom-right-radius: 4px;
+            text-align: left;
         }}
         
         .assistant-message {{
-            background-color: {LIGHT_GRAY};
+            background-color: white;
+            border: 1px solid #e1e4e8;
             color: {TEXT_COLOR};
             border-bottom-left-radius: 4px;
+        }}
+        
+        /* Avatar bubbles */
+        .message-block::before {{
+            content: '';
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            top: 0;
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        
+        .assistant-group::before {{
+            left: -48px;
+            background-color: {PRIMARY_COLOR};
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-4-8c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm8 0c.55 0 1-.45 1-1s-.45-1-1-1-1 .45-1 1 .45 1 1 1zm-4 5.5c2.5 0 4.5-1.5 5.5-3.5h-11c1 2 3 3.5 5.5 3.5z"/></svg>');
+        }}
+        
+        .user-group::before {{
+            right: -48px;
+            background-color: #6b7280;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>');
         }}
         
         /* Message metadata */
@@ -146,25 +242,29 @@ st.markdown(f"""
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
+            padding: 0 2px;
         }}
         
         .sender-label {{
             font-size: 13px;
             font-weight: 600;
+            color: #4a5568;
         }}
         
         .timestamp {{
             font-size: 11px;
-            color: #666;
+            color: #718096;
         }}
         
         .reply-reference {{
             font-size: 12px;
-            color: #666;
+            color: #718096;
             font-style: italic;
-            margin-top: 0.3rem;
-            margin-bottom: 0.5rem;
+            margin-top: 0.2rem;
+            margin-bottom: 0.6rem;
+            border-left: 2px solid {SECONDARY_COLOR};
+            padding-left: 8px;
         }}
         
         /* Input area */
@@ -390,7 +490,31 @@ def format_chat_message(role, message, timestamp, reply_to=None, message_id=None
     sender_label = "You" if is_user else "Headstart Copilot"
     
     # Format the message with Markdown
-    message = message.replace('\n', '<br>')
+    # Replace newlines with proper paragraph breaks for better readability
+    formatted_message = ""
+    for paragraph in message.split('\n\n'):
+        if paragraph.strip():
+            # Check if this is a list item (starts with - or *)
+            is_list = False
+            list_items = []
+            for line in paragraph.split('\n'):
+                line = line.strip()
+                if line and (line.startswith('- ') or line.startswith('* ')):
+                    is_list = True
+                    item_content = line[2:].strip()
+                    list_items.append(f"<li>{item_content}</li>")
+            
+            if is_list:
+                formatted_message += f"<ul class='message-list'>{''.join(list_items)}</ul>"
+            else:
+                # Regular paragraph
+                lines = [line for line in paragraph.split('\n') if line.strip()]
+                if lines:
+                    formatted_message += f"<p>{'<br>'.join(lines)}</p>"
+    
+    # If message has no paragraphs, just use the original with br tags
+    if not formatted_message:
+        formatted_message = f"<p>{message.replace('\n', '<br>')}</p>"
     
     # Reply reference
     reply_html = ""
@@ -414,7 +538,7 @@ def format_chat_message(role, message, timestamp, reply_to=None, message_id=None
             <div class='timestamp'>{timestamp}</div>
         </div>
         {reply_html}
-        <div class='message {message_class}'>{message}</div>
+        <div class='message {message_class}'>{formatted_message}</div>
         {feedback_html}
     </div>
     """
@@ -696,41 +820,248 @@ if prompt:
         
         st.rerun()
 
-# --- JavaScript for handling feedback ---
+# --- JavaScript for enhanced functionality ---
 st.markdown("""
 <script>
+// Handle feedback submissions
 function handleFeedback(messageId, feedbackType) {
     // In a real app, this would send feedback to a server
     console.log(`Feedback for ${messageId}: ${feedbackType}`);
     
-    // Show feedback received message
-    alert(`Thank you for your feedback!`);
+    // Update the UI to show feedback was received
+    const feedbackBtn = event.target;
+    const allBtns = document.querySelectorAll(`.feedback-btn[onclick*="${messageId}"]`);
+    
+    // Reset all buttons
+    allBtns.forEach(btn => {
+        btn.style.color = '#718096';
+        btn.style.transform = 'scale(1)';
+    });
+    
+    // Highlight selected button
+    feedbackBtn.style.color = feedbackType === 'helpful' ? '#0078D4' : '#f56565';
+    feedbackBtn.style.transform = 'scale(1.2)';
+    
+    // Show temporary toast notification
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = 'Thanks for your feedback!';
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Remove after delay
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 2000);
 }
+
+// Smooth scrolling to bottom of chat
+function scrollToBottom() {
+    const chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+}
+
+// Format code blocks
+function formatCodeBlocks() {
+    const messages = document.querySelectorAll('.message');
+    messages.forEach(message => {
+        const codeBlocks = message.querySelectorAll('pre code');
+        if (codeBlocks.length > 0) {
+            codeBlocks.forEach(block => {
+                // Add copy button
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-code-btn';
+                copyBtn.innerHTML = '📋 Copy';
+                copyBtn.onclick = function() {
+                    const code = block.textContent;
+                    navigator.clipboard.writeText(code);
+                    copyBtn.innerHTML = '✓ Copied!';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '📋 Copy';
+                    }, 2000);
+                };
+                
+                // Create wrapper for code block
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+                
+                // Move code block into wrapper
+                block.parentNode.insertBefore(wrapper, block);
+                wrapper.appendChild(block);
+                
+                // Add copy button to wrapper
+                wrapper.appendChild(copyBtn);
+            });
+        }
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    scrollToBottom();
+    formatCodeBlocks();
+    
+    // Observe for content changes
+    const observer = new MutationObserver(function() {
+        scrollToBottom();
+        formatCodeBlocks();
+    });
+    
+    // Start observing chat container
+    const chatContainer = document.getElementById('chat-container');
+    if (chatContainer) {
+        observer.observe(chatContainer, { childList: true, subtree: true });
+    }
+});
 </script>
+
+<style>
+/* Toast notification */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background-color: #0078D4;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+/* Code block styling */
+.code-block-wrapper {
+    position: relative;
+    margin: 1rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.copy-code-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: rgba(255,255,255,0.8);
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 1;
+    transition: all 0.2s ease;
+}
+
+.copy-code-btn:hover {
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+</style>
 """, unsafe_allow_html=True)
 
 # --- Footer ---
 st.markdown("""
     <div class="footer">
-        <strong>Headstart Copilot</strong> | Prototype Version 1.0 | Developed for the Copilot Hackathon (April 2025) | Powered by Azure OpenAI
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="footer-icon">🚀</span>
+                <strong>Headstart Copilot</strong>
+            </div>
+            <div class="footer-links">
+                <a href="#" class="footer-link">Terms</a>
+                <a href="#" class="footer-link">Privacy</a>
+                <a href="#" class="footer-link">Help</a>
+            </div>
+            <div class="footer-info">
+                Prototype Version 1.0 | Hackathon Edition (April 2025) | Powered by Azure OpenAI
+            </div>
+        </div>
     </div>
-""", unsafe_allow_html=True)
 
-# --- Add auto-scrolling to bottom of chat ---
-st.markdown("""
-<script>
-    function scrollToBottom() {
-        const chatContainer = document.getElementById('chat-container');
-        if (chatContainer) {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
+<style>
+.footer {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background-color: white;
+    box-shadow: 0 -3px 10px rgba(0,0,0,0.05);
+    z-index: 100;
+}
+
+.footer-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.footer-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.footer-icon {
+    font-size: 16px;
+}
+
+.footer-links {
+    display: flex;
+    gap: 16px;
+}
+
+.footer-link {
+    color: #4a5568;
+    text-decoration: none;
+    font-size: 12px;
+    transition: color 0.2s;
+}
+
+.footer-link:hover {
+    color: #0078D4;
+}
+
+.footer-info {
+    font-size: 12px;
+    color: #718096;
+}
+
+@media (max-width: 768px) {
+    .footer-content {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
     }
     
-    // Run on page load and whenever content changes
-    scrollToBottom();
-    const observer = new MutationObserver(scrollToBottom);
-    observer.observe(document.getElementById('chat-container'), { childList: true, subtree: true });
-</script>
+    .footer-logo {
+        justify-content: center;
+    }
+    
+    .footer-links {
+        justify-content: center;
+        margin: 8px 0;
+    }
+}
+</style>
 """, unsafe_allow_html=True)
 
 # Check for inactivity timeout (5 minutes)
